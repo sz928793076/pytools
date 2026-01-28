@@ -194,7 +194,7 @@ class TaskRow(QFrame):
 class RPAWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("不高兴就喝水 RPA 配置工具")
+        self.setWindowTitle("自动化操作 RPA 配置工具")
         self.resize(1000, 650)
         self.engine = RPAEngine()
         self.rows = []
