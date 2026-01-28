@@ -1,0 +1,72 @@
+[
+    {
+        "type": 7.0,
+        "value": "f4",
+        "retry": 1,
+        "delay": 2.0,
+        "desc": "打开星际和平指南 (快捷键F4)"
+    },
+    {
+        "type": 1.0,
+        "value": "D:/project/py/rpa_gui/images/hsr_survival_index.png",
+        "retry": 5,
+        "delay": 1.0,
+        "desc": "点击左侧‘生存索引’标签"
+    },
+    {
+        "type": 1.0,
+        "value": "D:/project/py/rpa_gui/images/hsr_calyx_golden.png",
+        "retry": 5,
+        "delay": 1.0,
+        "desc": "选择‘拟造花萼(金)’或其他你想打的副本"
+    },
+    {
+        "type": 1.0,
+        "value": "D:/project/py/rpa_gui/images/hsr_teleport_btn.png",
+        "retry": 5,
+        "delay": 5.0,
+        "desc": "点击右下角‘传送’按钮 (传送加载较慢，设为5秒间隔)"
+    },
+    {
+        "type": 7.0,
+        "value": "f",
+        "retry": 1,
+        "delay": 2.0,
+        "desc": "按F键与副本机关交互"
+    },
+    {
+        "type": 1.0,
+        "value": "D:/project/py/rpa_gui/images/hsr_max_rounds.png",
+        "retry": 5,
+        "delay": 1.0,
+        "desc": "点击副本次数选择（建议截图次数最右侧的‘+’号或最大次数）"
+    },
+    {
+        "type": 1.0,
+        "value": "D:/project/py/rpa_gui/images/hsr_start_challenge.png",
+        "retry": 5,
+        "delay": 5.0,
+        "desc": "点击‘开启挑战’按钮 (进入战斗需等待加载)"
+    },
+    {
+        "type": 8.0,
+        "value": "D:/project/py/rpa_gui/images/hsr_auto_battle_off.png",
+        "retry": 1,
+        "delay": 1.0,
+        "desc": "检测是否开启自动战斗（如果没开，这里可以加个点击动作）"
+    },
+    {
+        "type": 1.0,
+        "value": "D:/project/py/rpa_gui/images/hsr_battle_finished.png",
+        "retry": 100,
+        "delay": 2.0,
+        "desc": "循环查找‘战斗结束’或‘退出挑战’的按钮 (retry设高，模拟等待战斗结束)"
+    },
+    {
+        "type": 1.0,
+        "value": "D:/project/py/rpa_gui/images/hsr_exit_btn.png",
+        "retry": 5,
+        "delay": 3.0,
+        "desc": "点击‘退出挑战’按钮回到大世界"
+    }
+]

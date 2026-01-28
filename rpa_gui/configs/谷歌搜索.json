@@ -1,22 +1,37 @@
 [
     {
         "type": 1.0,
-        "value": "D:/project/py/rpa_gui/images/img.png",
-        "retry": 1
+        "desc": "点击浏览器收藏夹里的google",
+        "value": "D:/project/py/rpa_gui/images/img_3.png",
+        "retry": 4,
+        "delay": 0.5
     },
     {
         "type": 1.0,
+        "desc": "点击搜索栏",
         "value": "D:/project/py/rpa_gui/images/img_2.png",
-        "retry": 1
+        "retry": 4,
+        "delay": 1.0
     },
     {
         "type": 4.0,
+        "desc": "输入搜索内容",
         "value": "hello world",
-        "retry": 1
+        "retry": 4,
+        "delay": 2.0
     },
     {
         "type": 7.0,
+        "desc": "回车",
         "value": "enter",
-        "retry": 1
+        "retry": 1,
+        "delay": 1.0
+    },
+    {
+        "type": 5.0,
+        "desc": "等待",
+        "value": "2",
+        "retry": 1,
+        "delay": 0.5
     }
 ]
