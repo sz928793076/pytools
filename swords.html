@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>万剑归宗 - 归元聚气版</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #010103;
+            font-family: 'Microsoft YaHei', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            overscroll-behavior: none;
+        }
+        canvas { display: block; }
+
+        #orientation-lock {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #00ffcc;
+            text-align: center;
+        }
+        #orientation-lock svg { width: 64px; height: 64px; fill: #00ffcc; margin-bottom: 20px; animation: rotatePhone 2s infinite; }
+        @media screen and (orientation: portrait) {
+            #orientation-lock { display: flex; }
+        }
+        @keyframes rotatePhone { 0% { transform: rotate(0deg); } 25% { transform: rotate(90deg); } 100% { transform: rotate(90deg); } }
+
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+        }
+
+        #toggle-controls {
+            position: absolute; top: 15px; right: 15px;
+            pointer-events: auto; z-index: 30;
+            background: rgba(0, 255, 200, 0.1);
+            border: 1px solid rgba(0, 255, 200, 0.4);
+            color: #00ffcc;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 10px rgba(0,255,200,0.2);
+        }
+
+        #controls {
+            position: absolute;
+            top: 60px; right: 15px;
+            pointer-events: auto;
+            z-index: 20;
+            background: rgba(0, 10, 20, 0.85);
+            border: 1px solid rgba(0, 255, 200, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            color: #00ffcc;
+            font-size: 12px;
+            width: 220px;
+            max-height: 80vh;
+            overflow-y: auto;
+            transform-origin: top right;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        #controls.hidden { transform: scale(0.9); opacity: 0; pointer-events: none; }
+        .control-item { margin-bottom: 12px; }
+        #controls label { display: block; margin-bottom: 4px; font-weight: bold; letter-spacing: 1px;}
+
+        select {
+            width: 100%; background: rgba(0, 0, 0, 0.5); color: #00ffcc;
+            border: 1px solid #00ffcc; padding: 5px; border-radius: 4px; outline: none;
+        }
+        select option { background: #001428; color: #00ffcc; }
+
+        #formation-display {
+            position: absolute; top: 15%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center; pointer-events: none; width: 100%;
+        }
+        #formation-name {
+            font-size: 32px; font-weight: bold; color: #00ffcc;
+            text-shadow: 0 0 20px rgba(0, 255, 200, 0.8);
+            letter-spacing: 5px; opacity: 0; transition: opacity 0.5s;
+        }
+        #formation-sub {
+            font-size: 12px; color: rgba(255,255,255,0.7);
+            margin-top: 5px; letter-spacing: 2px; opacity: 0; transition: opacity 0.5s;
+        }
+
+        #tips {
+            position: absolute; bottom: 15px; left: 0; width: 100%;
+            color: rgba(255, 255, 255, 0.5); font-size: 12px;
+            text-align: center; pointer-events: none;
+            text-shadow: 0 0 2px #000;
+        }
+
+        #cursor-ring {
+            position: absolute; width: 40px; height: 40px;
+            border: 1px solid rgba(0, 255, 200, 0.6); border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none;
+            box-shadow: 0 0 15px rgba(0, 255, 200, 0.4);
+            display: none;
+            transition: transform 0.1s;
+        }
+        #cursor-ring.active { display: block; }
+        #cursor-ring.hidden-mode { display: none !important; }
+
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; margin: 5px 0; }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: rgba(0,255,200,0.2); border-radius: 2px; }
+        input[type=range]::-webkit-slider-thumb { border: 1px solid #00ffcc; height: 14px; width: 14px; border-radius: 50%; background: #010103; -webkit-appearance: none; margin-top: -5px; box-shadow: 0 0 8px rgba(0,255,200,1); }
+
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ffcc; font-size: 18px; letter-spacing: 4px; white-space: nowrap; text-shadow: 0 0 10px #00ffcc; }
+    </style>
+</head>
+<body id="body">
+
+    <div id="orientation-lock">
+        <svg viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+        <div>请横屏浏览以御剑飞行</div>
+    </div>
+
+    <div id="ui-layer">
+        <div id="loading">灵力注入中...</div>
+
+        <div id="formation-display">
+            <div id="formation-name"></div>
+            <div id="formation-sub"></div>
+        </div>
+
+        <div id="tips">
+            <span id="tip-text">随行模式：单指引导 · 双指旋转</span>
+        </div>
+        <div id="cursor-ring"></div>
+        <button id="toggle-controls">⚙ 设置 / 阵法</button>
+
+        <div id="controls" class="hidden">
+            <div class="control-item">
+                <label>选择阵法 (Formation)</label>
+                <select id="formation-select"></select>
+            </div>
+            <div style="border-top: 1px solid rgba(0,255,200,0.2); margin: 10px 0;"></div>
+            <div class="control-item">
+                <label>剑阵数量: <span id="count-val">1256</span></label>
+                <input type="range" id="count-slider" min="0" max="2000" value="1256" step="10">
+            </div>
+            <div class="control-item">
+                <label>飞剑大小: <span id="size-val">0.5x</span></label>
+                <input type="range" id="size-slider" min="0.5" max="3.0" value="0.5" step="0.1">
+            </div>
+            <div class="control-item">
+                <label>分布疏密: <span id="spread-val">2.0x</span></label>
+                <input type="range" id="spread-slider" min="0.1" max="3.0" value="2.0" step="0.1">
+            </div>
+            <div class="control-item">
+                <label>剑阵亮度: <span id="brightness-val">1.5</span></label>
+                <input type="range" id="brightness-slider" min="0" max="4.0" value="1.5" step="0.1">
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+
+        const MAX_SWORDS = 2000;
+        let activeSwordCount = 1256;
+        let globalSwordScale = 0.5;
+        let globalSwordSpread = 2.0;
+        const BG_PARTICLE_COUNT = 1500;
+        const IDLE_TIMEOUT = 1000;
+
+        let camera, scene, renderer, composer, bloomPass;
+        let swordMeshGreen, swordMeshYellow, laserMesh;
+        let mainLaserMesh;
+        let dummy, laserDummy, bgStars;
+        let mouse = new THREE.Vector2(0, 0);
+        let raycaster = new THREE.Raycaster();
+        let plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        let mouseWorldPos = new THREE.Vector3();
+        let centerPos = new THREE.Vector3(0, 0, 0);
+
+        let camRadius = 400;
+        let camTheta = 0;
+        let camPhi = Math.PI / 2.5;
+
+        let lastTouchX = 0, lastTouchY = 0, lastTouchDist = 0;
+
+        let mouseHistory = [];
+        const HISTORY_LENGTH = 50;
+        let lastMouseMoveTime = Date.now();
+        let isIdle = false;
+        let currentFormationId = 0;
+
+        const FORMATIONS = {
+            0: { name: "无相 · 随行", sub: "FOLLOW MODE" },
+            1: { name: "一元 · 归元阵", sub: "SPHERE DEFENSE" },
+            2: { name: "两仪 · 阴阳阵", sub: "TWIN DRAGON" },
+            3: { name: "三才 · 穿云钻", sub: "PIERCING DRILL" },
+            4: { name: "四象 · 剑冲云霄", sub: "HEAVENLY LASER CIRCLE" },
+            5: { name: "五行 · 剑雨阵", sub: "METEOR RAIN" },
+            6: { name: "六合 · 银河旋", sub: "GALAXY SPIRAL" },
+            7: { name: "七星 · 冲锋矢", sub: "ASSAULT ARROW" },
+            8: { name: "八卦 · 镇地环", sub: "GROUND SEAL" },
+            9: { name: "九宫 · 缭乱舞", sub: "CHAOS HELIX" }
+        };
+
+        let idleLerpFactor = 0;
+        let sphereRotationTime = 0;
+        const swordsData = [];
+
+        const cursorRing = document.getElementById('cursor-ring');
+        const tipText = document.getElementById('tip-text');
+        const countSlider = document.getElementById('count-slider');
+        const countVal = document.getElementById('count-val');
+        const brightnessSlider = document.getElementById('brightness-slider');
+        const sizeSlider = document.getElementById('size-slider');
+        const spreadSlider = document.getElementById('spread-slider');
+        const formationNameEl = document.getElementById('formation-name');
+        const formationSubEl = document.getElementById('formation-sub');
+        const formationSelect = document.getElementById('formation-select');
+        const controlsPanel = document.getElementById('controls');
+        const toggleBtn = document.getElementById('toggle-controls');
+
+        init(); animate();
+
+        function init() {
+            initUI();
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            document.addEventListener('contextmenu', e => e.preventDefault());
+
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x010103, 0.002);
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 8000);
+
+            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambientLight);
+            const mainLight = new THREE.DirectionalLight(0xffffff, 2.0);
+            mainLight.position.set(50, 50, 100);
+            scene.add(mainLight);
+            const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            backLight.position.set(-50, -50, -100);
+            scene.add(backLight);
+
+            window.greenLight = new THREE.PointLight(0x00ff00, 1, 300);
+            window.yellowLight = new THREE.PointLight(0xffff00, 1, 300);
+            scene.add(window.greenLight);
+            scene.add(window.yellowLight);
+
+            const renderScene = new RenderPass(scene, camera);
+            bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.8, 0.7, 0.1);
+            composer = new EffectComposer(renderer);
+            composer.addPass(renderScene);
+            composer.addPass(bloomPass);
+
+            createBackgroundStars();
+            createSwords();
+            createLasers();
+
+            document.getElementById('loading').style.display = 'none';
+            window.addEventListener('resize', onWindowResize);
+            setupInputs();
+        }
+
+        function initUI() {
+            for (let i = 0; i <= 9; i++) {
+                const opt = document.createElement('option');
+                opt.value = i; opt.innerText = `${i}. ${FORMATIONS[i].name}`;
+                formationSelect.appendChild(opt);
+            }
+            formationSelect.addEventListener('change', (e) => switchFormation(parseInt(e.target.value)));
+            toggleBtn.addEventListener('click', () => controlsPanel.classList.toggle('hidden'));
+            countSlider.addEventListener('input', (e) => updateSwordCount(parseInt(e.target.value)));
+            brightnessSlider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                document.getElementById('brightness-val').innerText = val.toFixed(1);
+                if (bloomPass) bloomPass.strength = val;
+            });
+            sizeSlider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                document.getElementById('size-val').innerText = val.toFixed(1) + "x";
+                globalSwordScale = val;
+            });
+            spreadSlider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                document.getElementById('spread-val').innerText = val.toFixed(1) + "x";
+                globalSwordSpread = val;
+            });
+        }
+
+        function setupInputs() {
+            document.addEventListener('mousemove', (e) => {
+                if(e.buttons === 1 && currentFormationId > 0) handleRotate(e.movementX, e.movementY);
+                else if (e.buttons === 2) handleRotate(e.movementX, e.movementY);
+                else handleInputMove(e.clientX, e.clientY);
+            });
+            document.addEventListener('wheel', (e) => handleZoom(e.deltaY * 0.2), { passive: true });
+            document.addEventListener('touchstart', (e) => {
+                if (e.target.closest('#controls') || e.target.closest('#toggle-controls')) return;
+                e.preventDefault();
+                cursorRing.classList.add('active');
+                if (e.touches.length === 1) {
+                    lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY;
+                    if(currentFormationId === 0) handleInputMove(e.touches[0].clientX, e.touches[0].clientY);
+                } else if (e.touches.length === 2) {
+                    lastTouchX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    lastTouchY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    lastTouchDist = getTouchDist(e);
+                }
+            }, { passive: false });
+            document.addEventListener('touchmove', (e) => {
+                if (e.target.closest('#controls')) return;
+                e.preventDefault();
+                if (e.touches.length === 1) {
+                    const cx = e.touches[0].clientX, cy = e.touches[0].clientY;
+                    if (currentFormationId > 0) handleRotate(cx - lastTouchX, cy - lastTouchY);
+                    else handleInputMove(cx, cy);
+                    lastTouchX = cx; lastTouchY = cy;
+                } else if (e.touches.length === 2) {
+                    const dist = getTouchDist(e);
+                    handleZoom((lastTouchDist - dist) * 2.0);
+                    if (currentFormationId === 0) {
+                         const cx2 = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                         const cy2 = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                         handleRotate(cx2 - lastTouchX, cy2 - lastTouchY);
+                         lastTouchX = cx2; lastTouchY = cy2;
+                    }
+                    lastTouchDist = dist;
+                }
+            }, { passive: false });
+            document.addEventListener('touchend', () => cursorRing.classList.remove('active'));
+        }
+
+        function getTouchDist(e) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function handleInputMove(x, y) {
+            cursorRing.style.left = x + 'px'; cursorRing.style.top = y + 'px';
+            mouse.x = (x / window.innerWidth) * 2 - 1; mouse.y = -(y / window.innerHeight) * 2 + 1;
+            lastMouseMoveTime = Date.now();
+            if (currentFormationId === 0) isIdle = false;
+        }
+
+        function handleRotate(dx, dy) {
+            camTheta -= dx * 0.005;
+            camPhi = Math.max(0.1, Math.min(Math.PI - 0.1, camPhi - dy * 0.005));
+        }
+
+        function handleZoom(delta) {
+            camRadius = Math.max(50, Math.min(2500, camRadius + delta));
+        }
+
+        function switchFormation(id) {
+            if (currentFormationId === id) return;
+            currentFormationId = id; isIdle = false;
+            formationSelect.value = id;
+            const info = FORMATIONS[id];
+            formationNameEl.innerText = info.name; formationSubEl.innerText = info.sub;
+            formationNameEl.style.opacity = 1; formationSubEl.style.opacity = 1;
+
+            if (id > 0) {
+                tipText.innerText = "阵法模式：单指旋转 · 双指缩放";
+                cursorRing.classList.add('hidden-mode');
+                if (id === 4) {
+                    camPhi = Math.PI / 2.2;
+                    camRadius = 600;
+                }
+            } else {
+                tipText.innerText = "随行模式：单指引导 · 双指旋转";
+                cursorRing.classList.remove('hidden-mode');
+            }
+
+            clearTimeout(window.formationTimer);
+            window.formationTimer = setTimeout(() => {
+                formationNameEl.style.opacity = 0; formationSubEl.style.opacity = 0;
+            }, 2000);
+        }
+
+        function updateSwordCount(newCount) {
+            activeSwordCount = newCount;
+            countVal.innerText = newCount;
+            const greenCount = Math.ceil(activeSwordCount / 2);
+            const yellowCount = Math.floor(activeSwordCount / 2);
+            if(swordMeshGreen) swordMeshGreen.count = greenCount;
+            if(swordMeshYellow) swordMeshYellow.count = yellowCount;
+            if(laserMesh) laserMesh.count = activeSwordCount;
+            recalculateFormationData();
+        }
+
+        function createLasers() {
+            const laserGeo = new THREE.CylinderGeometry(0.4, 0.4, 4000, 8);
+            laserGeo.rotateX(Math.PI / 2);
+            laserGeo.translate(0, 0, 2000);
+
+            const laserMat = new THREE.MeshBasicMaterial({
+                color: 0x88ffff,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            laserMesh = new THREE.InstancedMesh(laserGeo, laserMat, MAX_SWORDS);
+            laserMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            laserMesh.visible = false;
+            scene.add(laserMesh);
+            laserDummy = new THREE.Object3D();
+
+            // 中央大激光
+            const mainGeo = new THREE.CylinderGeometry(30, 30, 6000, 32);
+            mainGeo.translate(0, 3000, 0);
+            const mainMat = new THREE.MeshBasicMaterial({
+                color: 0xccffff,
+                transparent: true,
+                opacity: 0.0,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            mainLaserMesh = new THREE.Mesh(mainGeo, mainMat);
+            scene.add(mainLaserMesh);
+        }
+
+        function recalculateFormationData() {
+            if(activeSwordCount === 0) return;
+            for (let i = 0; i < activeSwordCount; i++) {
+                swordsData[i].sphereTargetLocal = getFibonacciSpherePoint(i, activeSwordCount, 50);
+                const angle = (i / activeSwordCount) * Math.PI * 2;
+                const radius = 200 + (Math.random() - 0.5) * 100;
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+                swordsData[i].formation4Data.pos.set(x, -10, z);
+                swordsData[i].formation4Data.tilt.set(
+                    (Math.random() - 0.5) * 0.15,
+                    0,
+                    (Math.random() - 0.5) * 0.15
+                );
+            }
+        }
+
+        function createBackgroundStars() {
+            const geometry = new THREE.BufferGeometry();
+            const vertices = []; const sizes = [];
+            for (let i = 0; i < BG_PARTICLE_COUNT; i++) {
+                const r = 400 + Math.random() * 600;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                vertices.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+                sizes.push(Math.random() * 2);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+            const material = new THREE.PointsMaterial({
+                color: 0x00aa88, size: 2, transparent: true, opacity: 0.6, sizeAttenuation: true, blending: THREE.AdditiveBlending
+            });
+            bgStars = new THREE.Points(geometry, material);
+            scene.add(bgStars);
+        }
+
+        function createSingleColorTexture(colorType) {
+            const width = 512; const height = 512;
+            const handleSplitY = height * 0.75;
+            const dCtx = document.createElement('canvas').getContext('2d');
+            dCtx.canvas.width = width; dCtx.canvas.height = height;
+
+            const bladeGrad = dCtx.createLinearGradient(0, 0, 0, handleSplitY);
+            if (colorType === 'green') {
+                bladeGrad.addColorStop(0, '#ccffcc'); bladeGrad.addColorStop(0.5, '#33ff33'); bladeGrad.addColorStop(1, '#006600');
+            } else {
+                bladeGrad.addColorStop(0, '#ffffcc'); bladeGrad.addColorStop(0.5, '#ffcc00'); bladeGrad.addColorStop(1, '#996600');
+            }
+            dCtx.fillStyle = bladeGrad; dCtx.fillRect(0, 0, width, handleSplitY);
+
+            const handleGrad = dCtx.createLinearGradient(0, handleSplitY, 0, height);
+            handleGrad.addColorStop(0, '#999999'); handleGrad.addColorStop(0.3, '#ffffff'); handleGrad.addColorStop(0.7, '#dddddd'); handleGrad.addColorStop(1, '#bbbbbb');
+            dCtx.fillStyle = handleGrad; dCtx.fillRect(0, handleSplitY, width, height - handleSplitY);
+
+            dCtx.globalCompositeOperation = 'overlay'; dCtx.fillStyle = `rgba(0, 0, 0, 0.1)`;
+            for (let i = 0; i < 5000; i++) dCtx.fillRect(Math.random() * width, Math.random() * height, 1, Math.random() * 5 + 1);
+
+            const eCtx = document.createElement('canvas').getContext('2d');
+            eCtx.canvas.width = width; eCtx.canvas.height = height;
+            eCtx.fillStyle = '#000000'; eCtx.fillRect(0, 0, width, height);
+            eCtx.globalCompositeOperation = 'lighter'; eCtx.shadowBlur = 15; eCtx.lineWidth = 4;
+            const glowColor = colorType === 'green' ? '#33ff33' : '#ffcc00';
+            eCtx.shadowColor = glowColor; eCtx.strokeStyle = glowColor;
+            for (let i = 0; i < 12; i++) {
+                eCtx.beginPath();
+                const x = Math.random() * width;
+                eCtx.moveTo(x, 0);
+                eCtx.bezierCurveTo(x + Math.random() * 80 - 40, handleSplitY * 0.3, x + Math.random() * 80 - 40, handleSplitY * 0.6, x + Math.random() * 40 - 20, handleSplitY - 10);
+                eCtx.stroke();
+            }
+
+            const diffuseMap = new THREE.CanvasTexture(dCtx.canvas);
+            const emissiveMap = new THREE.CanvasTexture(eCtx.canvas);
+            return { diffuseMap, emissiveMap };
+        }
+
+        function createSwords() {
+            const swordGeometry = createDirectedSwordGeometry();
+            const texGreen = createSingleColorTexture('green');
+            const matGreen = new THREE.MeshStandardMaterial({
+                color: 0xffffff, map: texGreen.diffuseMap,
+                emissive: 0xffffff, emissiveMap: texGreen.emissiveMap, emissiveIntensity: 2.5,
+                roughness: 0.2, metalness: 0.9, side: THREE.DoubleSide,
+            });
+            const texYellow = createSingleColorTexture('yellow');
+            const matYellow = new THREE.MeshStandardMaterial({
+                color: 0xffffff, map: texYellow.diffuseMap,
+                emissive: 0xffffff, emissiveMap: texYellow.emissiveMap, emissiveIntensity: 2.5,
+                roughness: 0.2, metalness: 0.9, side: THREE.DoubleSide,
+            });
+
+            swordMeshGreen = new THREE.InstancedMesh(swordGeometry, matGreen, MAX_SWORDS);
+            swordMeshYellow = new THREE.InstancedMesh(swordGeometry, matYellow, MAX_SWORDS);
+            swordMeshGreen.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            swordMeshYellow.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            scene.add(swordMeshGreen); scene.add(swordMeshYellow);
+            dummy = new THREE.Object3D();
+
+            for (let i = 0; i < MAX_SWORDS; i++) {
+                swordsData.push({
+                    currentPos: new THREE.Vector3((Math.random()-0.5)*300, (Math.random()-0.5)*300, (Math.random()-0.5)*300),
+                    velocity: new THREE.Vector3(),
+                    randomOffset: new THREE.Vector3((Math.random()-0.5)*25, (Math.random()-0.5)*25, (Math.random()-0.5)*10),
+                    sphereTargetLocal: new THREE.Vector3(),
+                    formation4Data: {
+                        pos: new THREE.Vector3(),
+                        tilt: new THREE.Euler()
+                    }
+                });
+            }
+            updateSwordCount(activeSwordCount);
+        }
+
+        function createDirectedSwordGeometry() {
+            const bladeBase = new THREE.BoxGeometry(1.2, 0.15, 10, 4, 2, 16);
+            const positions = bladeBase.attributes.position;
+            for (let i = 0; i < positions.count; i++) {
+                let x = positions.getX(i); let y = positions.getY(i); let z = positions.getZ(i);
+                if (z > 3.0) x *= Math.pow((5 - z) / 2.0, 0.6);
+                if (Math.abs(x) > 0.2) y *= 0.1; else y *= 2.5;
+                positions.setXYZ(i, x, y, z + 2);
+            }
+            bladeBase.computeVertexNormals();
+
+            const guardGeo = new THREE.BoxGeometry(4.5, 0.2, 1.0, 4, 1, 2);
+            const guardPos = guardGeo.attributes.position;
+            for(let i=0; i<guardPos.count; i++) guardPos.setZ(i, guardPos.getZ(i) - Math.abs(guardPos.getX(i)) * 0.6);
+            guardGeo.translate(0, 0, -3.2);
+
+            const handleGeo = new THREE.CylinderGeometry(0.12, 0.18, 3, 12);
+            handleGeo.rotateX(Math.PI / 2); handleGeo.translate(0, 0, -5);
+
+            const merged = BufferGeometryUtils.mergeGeometries([bladeBase, guardGeo, handleGeo]);
+            merged.scale(2.2, 2.2, 2.2);
+            return merged;
+        }
+
+        function getFibonacciSpherePoint(i, n, radius) {
+            if (n === 0) return new THREE.Vector3(0,0,0);
+            const k = i + .5;
+            const phi = Math.acos(1 - 2 * k / n);
+            const theta = Math.PI * (1 + Math.sqrt(5)) * k;
+            return new THREE.Vector3(Math.cos(theta)*Math.sin(phi)*radius, Math.sin(theta)*Math.sin(phi)*radius, Math.cos(phi)*radius);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const now = Date.now();
+            const time = now * 0.001;
+
+            const cx = camRadius * Math.sin(camPhi) * Math.sin(camTheta);
+            const cy = camRadius * Math.cos(camPhi);
+            const cz = camRadius * Math.sin(camPhi) * Math.cos(camTheta);
+            camera.position.set(cx, cy, cz);
+            camera.lookAt(0, 0, 0);
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = new THREE.Vector3();
+            raycaster.ray.intersectPlane(plane, intersects);
+            mouseWorldPos.copy(intersects).clampLength(0, 300);
+
+            if (currentFormationId === 0) {
+                 if(window.greenLight) window.greenLight.position.copy(mouseWorldPos).add(new THREE.Vector3(-30, 0, 30));
+                 if(window.yellowLight) window.yellowLight.position.copy(mouseWorldPos).add(new THREE.Vector3(30, 0, 30));
+            } else if (currentFormationId === 4) {
+                 const intensity = 2 + Math.sin(time * 10);
+                 if(window.greenLight) { window.greenLight.position.set(0, 50, 0); window.greenLight.intensity = intensity; }
+                 if(window.yellowLight) { window.yellowLight.position.set(0, 50, 0); window.yellowLight.intensity = intensity; }
+            } else {
+                 const lightR = 200;
+                 if(window.greenLight) { window.greenLight.position.set(Math.cos(time)*lightR, 100, Math.sin(time)*lightR); window.greenLight.intensity = 1; }
+                 if(window.yellowLight) { window.yellowLight.position.set(Math.sin(time)*lightR, -100, Math.cos(time)*lightR); window.yellowLight.intensity = 1; }
+            }
+
+            mouseHistory.unshift(mouseWorldPos.clone());
+            if (mouseHistory.length > HISTORY_LENGTH) mouseHistory.pop();
+
+            if (currentFormationId === 0 && now - lastMouseMoveTime > IDLE_TIMEOUT) isIdle = true;
+
+            sphereRotationTime += 0.003;
+            if (bgStars) { bgStars.rotation.y = now * 0.0001; bgStars.rotation.z = now * 0.00005; }
+            const globalRot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), now * 0.0005);
+
+            laserMesh.visible = (currentFormationId === 4);
+            let laserScale = 0;
+            if (currentFormationId === 4) {
+                laserScale = Math.min(1, (now - lastMouseMoveTime) / 500);
+                if(laserScale < 1) lastMouseMoveTime = now - laserScale * 500; else laserScale = 1;
+
+                mainLaserMesh.material.opacity = Math.min(0.8, laserScale * 0.8) + Math.sin(time*20)*0.1;
+                const pulse = 1 + Math.sin(time*30)*0.05;
+                mainLaserMesh.scale.set(pulse, 1, pulse);
+            } else {
+                mainLaserMesh.material.opacity = 0;
+            }
+
+            for (let i = 0; i < MAX_SWORDS; i++) {
+
+                // 1. 对于未激活的剑，将其缩小隐藏并重置
+                if (i >= activeSwordCount) {
+                     dummy.position.set(0, -5000, 0);
+                     dummy.scale.set(0, 0, 0);
+                     dummy.updateMatrix();
+                     if (i % 2 === 0) swordMeshGreen.setMatrixAt(i / 2, dummy.matrix);
+                     else swordMeshYellow.setMatrixAt(Math.floor(i / 2), dummy.matrix);
+
+                     // 关键修复：隐藏幽灵激光
+                     laserDummy.position.set(0, -5000, 0);
+                     laserDummy.scale.set(0, 0, 0);
+                     laserDummy.updateMatrix();
+                     laserMesh.setMatrixAt(i, laserDummy.matrix);
+                     continue;
+                }
+
+                const data = swordsData[i];
+                let targetPos = new THREE.Vector3();
+                let lookTarget = null;
+                let manualRotation = false;
+
+                if (currentFormationId > 0) {
+                    const idxRate = i / activeSwordCount;
+                    const scale = globalSwordScale;
+                    const spread = globalSwordSpread;
+                    const noise = data.randomOffset.clone().multiplyScalar(spread * 1.5);
+                    const anchor = centerPos;
+
+                    switch(currentFormationId) {
+                        case 1: { const radius = 100 * scale * spread; targetPos.copy(anchor).add(data.sphereTargetLocal.clone().normalize().multiplyScalar(radius).applyQuaternion(globalRot)); lookTarget = anchor; } break;
+                        case 2: { const arm = (i % 2 === 0) ? 1 : -1; const angle = idxRate * Math.PI * 4 + time * 2; const radius = (idxRate * 150 * scale + 20) * spread; targetPos.copy(anchor).add(new THREE.Vector3(Math.cos(angle + arm * Math.PI) * radius, Math.sin(angle + arm * Math.PI) * radius, (idxRate - 0.5) * 100 * spread)).add(noise); lookTarget = targetPos.clone().add(new THREE.Vector3(-Math.sin(angle)*arm, Math.cos(angle)*arm, 0)); } break;
+                        case 3: { const angle = idxRate * Math.PI * 10 + time * 5; targetPos.copy(anchor).add(new THREE.Vector3(Math.cos(angle) * 40 * scale * (1 - idxRate) * spread, Math.sin(angle) * 40 * scale * (1 - idxRate) * spread, (idxRate - 0.5) * 300 * scale * spread)).add(noise); lookTarget = targetPos.clone().add(new THREE.Vector3(0, 0, -1)); } break;
+                        case 4: {
+                            targetPos.copy(data.formation4Data.pos).multiplyScalar(spread);
+                            manualRotation = true;
+                            dummy.rotation.set(0, 0, 0);
+                            dummy.rotateX(-Math.PI / 2);
+                            dummy.rotation.x += data.formation4Data.tilt.x;
+                            dummy.rotation.z += data.formation4Data.tilt.z;
+                        } break;
+                        case 5: { const angle = idxRate * Math.PI * 10; const radius = Math.sqrt(idxRate) * 300 * scale * spread; targetPos.copy(anchor).add(new THREE.Vector3(Math.cos(angle) * radius, 200, Math.sin(angle) * radius)).add(noise); lookTarget = targetPos.clone().add(new THREE.Vector3(0, -1, 0)); } break;
+                        case 6: { const angle = (Math.floor(i/3) / (activeSwordCount/3)) * Math.PI * 4 + ((i%3) * Math.PI * 2 / 3) + time; targetPos.copy(anchor).add(new THREE.Vector3(Math.cos(angle) * (Math.floor(i/3) / (activeSwordCount/3)) * 250 * scale * spread, Math.sin(angle) * 80, (Math.random()-0.5) * 20)).add(noise); lookTarget = targetPos.clone().add(new THREE.Vector3(-Math.sin(angle), Math.cos(angle)*0.3, 0)); } break;
+                        case 7: { const row = Math.floor(Math.sqrt(i)); const col = i - row*row; targetPos.copy(anchor).add(new THREE.Vector3((col - row/2) * 24 * scale * spread, 0, -row * 18 * scale * spread + 100)).add(noise); lookTarget = targetPos.clone().add(new THREE.Vector3(0, 0, -1)); } break;
+                        case 8: { const angle = idxRate * Math.PI * 2 + time; const radius = 90 * scale * spread; targetPos.copy(anchor).add(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius * Math.cos(Math.PI * 0.35), Math.sin(angle) * radius * Math.sin(-Math.PI * 0.35))).add(noise); lookTarget = targetPos.clone().add(targetPos.clone().sub(anchor)); } break;
+                        case 9: {
+                            const t = time * 2 + idxRate * Math.PI * 8; const r = 100 * scale * spread;
+                            targetPos.copy(anchor).add(new THREE.Vector3(Math.sin(t) * r, Math.sin(t * 2) * (r * 0.5), Math.cos(t) * r)).add(noise);
+                            lookTarget = targetPos.clone().add(data.velocity);
+                        } break;
+                    }
+                } else {
+                    idleLerpFactor += ((isIdle ? 1 : 0) - idleLerpFactor) * 0.05;
+                    const historyIndex = Math.floor((i / activeSwordCount) * (mouseHistory.length - 1));
+                    const basePos = (mouseHistory[Math.min(historyIndex, mouseHistory.length - 1)] || mouseWorldPos).clone();
+                    const noise = new THREE.Vector3(Math.sin(i*0.3+time*2)*5, Math.cos(i*0.2+time*3)*5, Math.sin(i*0.5+time*4)*2).multiplyScalar(globalSwordSpread);
+                    const followTarget = basePos.add(data.randomOffset.clone().multiplyScalar(globalSwordSpread)).add(noise);
+                    let sphereTarget = data.sphereTargetLocal.clone().multiplyScalar(globalSwordSpread).applyAxisAngle(new THREE.Vector3(0,1,0), sphereRotationTime + i*0.005).applyQuaternion(globalRot).add(mouseWorldPos);
+                    targetPos.lerpVectors(followTarget, sphereTarget, idleLerpFactor);
+                }
+
+                const delta = targetPos.clone().sub(data.currentPos);
+                const dist = delta.length();
+                let speedMultiplier = 0.06; let drag = 0.88;
+                if (currentFormationId > 0) { speedMultiplier = 0.12; drag = 0.85; }
+
+                data.velocity.add(delta.normalize().multiplyScalar(dist * speedMultiplier)).multiplyScalar(drag);
+                data.currentPos.add(data.velocity);
+
+                dummy.position.copy(data.currentPos);
+                dummy.scale.set(globalSwordScale, globalSwordScale, globalSwordScale);
+
+                if (!manualRotation) {
+                    if (lookTarget) dummy.lookAt(lookTarget);
+                    else if (isIdle && currentFormationId === 0 && idleLerpFactor > 0.8) dummy.lookAt(data.currentPos.clone().add(data.currentPos.clone().sub(mouseWorldPos).normalize()));
+                    else if (data.velocity.lengthSq() > 0.5) dummy.lookAt(data.currentPos.clone().add(data.velocity));
+                    else dummy.lookAt(mouseWorldPos);
+                }
+
+                dummy.updateMatrix();
+                if (i % 2 === 0) swordMeshGreen.setMatrixAt(i / 2, dummy.matrix);
+                else swordMeshYellow.setMatrixAt(Math.floor(i / 2), dummy.matrix);
+
+                if (currentFormationId === 4) {
+                    laserDummy.position.copy(data.currentPos);
+                    laserDummy.rotation.copy(dummy.rotation);
+                    laserDummy.scale.set(1, 1, laserScale);
+                    laserDummy.updateMatrix();
+                    laserMesh.setMatrixAt(i, laserDummy.matrix);
+                }
+            }
+            swordMeshGreen.instanceMatrix.needsUpdate = true;
+            swordMeshYellow.instanceMatrix.needsUpdate = true;
+            if (currentFormationId === 4) laserMesh.instanceMatrix.needsUpdate = true;
+
+            composer.render();
+        }
+    </script>
+</body>
+</html>
