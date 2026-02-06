@@ -5,13 +5,13 @@ import json
 import shutil
 import pyautogui
 import pyperclip
-import traceback
 import ctypes
 import pygetwindow as gw
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                               QPushButton, QLabel, QComboBox, QLineEdit, QScrollArea,
-                               QFileDialog, QTextEdit, QMessageBox, QFrame, QListWidget)
-from PySide6.QtCore import Qt, QThread, Signal
+                               QPushButton, QLabel, QComboBox, QLineEdit,
+                               QFileDialog, QTextEdit, QMessageBox, QFrame, QListWidget,
+                               QListWidgetItem, QAbstractItemView)
+from PySide6.QtCore import Qt, QThread, Signal, QSize
 
 # --------------------------
 # Windows DPI 唤醒
@@ -30,7 +30,7 @@ if not os.path.exists(CONFIG_DIR):
 
 
 # --------------------------
-# 核心引擎
+# 核心引擎 (保持不变)
 # --------------------------
 class RPAEngine:
     def __init__(self):
@@ -55,6 +55,8 @@ class RPAEngine:
             if timeout and (time.time() - start_time > timeout):
                 return False
             try:
+                # 打印一下正在查找什么，方便调试
+                # print(f"正在查找: {img}")
                 location = pyautogui.locateCenterOnScreen(img, confidence=0.7, region=region)
                 if location is not None:
                     pyautogui.click(location.x, location.y, clicks=clickTimes, interval=0.2, duration=0.2, button=lOrR)
@@ -63,7 +65,9 @@ class RPAEngine:
                             if self.stop_requested: break
                             pyautogui.click(location.x, location.y, clicks=1, interval=0.1, button=lOrR)
                     return True
-            except Exception:
+            except Exception as e:
+                # 【关键修改】把错误打印出来！
+                print(f"查找出错: {e}")
                 pass
             time.sleep(0.5)
         return False
@@ -158,11 +162,12 @@ CMD_TYPES = {"左键单击": 1.0, "左键双击": 2.0, "右键单击": 3.0, "输
              "系统按键": 7.0, "鼠标悬停": 8.0, "截图保存": 9.0}
 CMD_TYPES_REV = {v: k for k, v in CMD_TYPES.items()}
 
-# 【再次优化】列宽度定义：步骤说明拉大到 350
+# 调整列宽，"move" 列用于显示拖拽手柄
 COL_WIDTHS = {
+    "move": 30,  # 拖拽手柄宽度
     "type": 100,
-    "desc": 350,  # 极大增强描述列宽度
-    "value": 250,
+    "desc": 320,
+    "value": 240,
     "file": 35,
     "retry": 45,
     "delay": 45,
@@ -171,12 +176,24 @@ COL_WIDTHS = {
 
 
 class TaskRow(QFrame):
-    def __init__(self, parent_layout, delete_callback):
+    def __init__(self, delete_callback):
         super().__init__()
         self.setFrameShape(QFrame.StyledPanel)
+        # 设置背景色，方便在拖拽时看清边界
+        self.setStyleSheet("TaskRow { background-color: #ffffff; border: 1px solid #cccccc; border-radius: 4px; }")
+
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(5, 2, 5, 2)
+        layout.setContentsMargins(5, 5, 5, 5)  # 稍微增加边距
         layout.setSpacing(10)
+
+        # 0. 拖拽手柄 (Visual Only)
+        self.handle_label = QLabel("≡")
+        self.handle_label.setFixedWidth(COL_WIDTHS["move"])
+        self.handle_label.setAlignment(Qt.AlignCenter)
+        self.handle_label.setStyleSheet("font-size: 16px; color: #888; cursor: size_all;")
+        # 提示用户按住这里拖动
+        self.handle_label.setToolTip("按住此处拖拽调整顺序")
+        layout.addWidget(self.handle_label)
 
         # 1. 指令类型
         self.type_combo = QComboBox()
@@ -184,9 +201,9 @@ class TaskRow(QFrame):
         self.type_combo.setFixedWidth(COL_WIDTHS["type"])
         layout.addWidget(self.type_combo)
 
-        # 2. 步骤说明 (宽度 350)
+        # 2. 步骤说明
         self.desc_input = QLineEdit()
-        self.desc_input.setPlaceholderText("在这里写下这一步要做什么，方便以后查看...")
+        self.desc_input.setPlaceholderText("步骤说明...")
         self.desc_input.setFixedWidth(COL_WIDTHS["desc"])
         layout.addWidget(self.desc_input)
 
@@ -219,8 +236,6 @@ class TaskRow(QFrame):
         self.del_btn.setStyleSheet("color: red; font-weight: bold;")
         self.del_btn.clicked.connect(lambda: delete_callback(self))
         layout.addWidget(self.del_btn)
-
-        parent_layout.insertWidget(parent_layout.count() - 1, self)
 
     def select_file(self):
         cmd_text = self.type_combo.currentText()
@@ -269,10 +284,9 @@ class WorkerThread(QThread):
 class RPAWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("RPA 自动化工具 ")
-        self.resize(1400, 800)  # 增加默认宽度
+        self.setWindowTitle("RPA 自动化工具 (支持拖拽排序)")
+        self.resize(1450, 800)
         self.engine = RPAEngine()
-        self.rows = []
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -281,10 +295,10 @@ class RPAWindow(QMainWindow):
         # --- 左侧面板 ---
         self.left_panel = QVBoxLayout()
         self.left_panel.addWidget(QLabel("<b>本地配置库:</b>"))
-        self.config_list = QListWidget()
-        self.config_list.setFixedWidth(200)
-        self.config_list.itemDoubleClicked.connect(self.load_selected_config)
-        self.left_panel.addWidget(self.config_list)
+        self.config_list_widget = QListWidget()
+        self.config_list_widget.setFixedWidth(200)
+        self.config_list_widget.itemDoubleClicked.connect(self.load_selected_config)
+        self.left_panel.addWidget(self.config_list_widget)
 
         btn_grid = QVBoxLayout()
         self.import_btn = QPushButton("📥 导入外部配置")
@@ -350,9 +364,12 @@ class RPAWindow(QMainWindow):
         header_layout.setContentsMargins(15, 8, 15, 8)
         header_layout.setSpacing(10)
 
+        h_move = QLabel("拖动");
+        h_move.setFixedWidth(COL_WIDTHS["move"])
+        h_move.setAlignment(Qt.AlignCenter)
         h_type = QLabel("指令类型");
         h_type.setFixedWidth(COL_WIDTHS["type"])
-        h_desc = QLabel("步骤说明 (任务描述)");
+        h_desc = QLabel("步骤说明");
         h_desc.setFixedWidth(COL_WIDTHS["desc"])
         h_val = QLabel("具体内容/路径")
         h_file = QLabel("..");
@@ -366,6 +383,7 @@ class RPAWindow(QMainWindow):
         h_del = QLabel("操作");
         h_del.setFixedWidth(COL_WIDTHS["del"])
 
+        header_layout.addWidget(h_move)  # 拖动手柄列
         header_layout.addWidget(h_type)
         header_layout.addWidget(h_desc)
         header_layout.addWidget(h_val)
@@ -375,21 +393,23 @@ class RPAWindow(QMainWindow):
         header_layout.addWidget(h_del)
         self.right_panel.addWidget(header_frame)
 
-        # 任务列表区
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        self.task_container = QWidget()
-        self.task_layout = QVBoxLayout(self.task_container)
-        self.task_layout.setContentsMargins(5, 5, 5, 5)
-        self.task_layout.addStretch()
-        scroll.setWidget(self.task_container)
-        self.right_panel.addWidget(scroll)
+        # --- 任务列表区 (改为 QListWidget 以支持拖拽) ---
+        self.task_list_widget = QListWidget()
+        self.task_list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.task_list_widget.setDragEnabled(True)  # 允许拖拽
+        self.task_list_widget.setAcceptDrops(True)  # 允许放下
+        self.task_list_widget.setDropIndicatorShown(True)  # 显示插入位置指示线
+        self.task_list_widget.setDragDropMode(QAbstractItemView.InternalMove)  # 仅限内部移动
+        # 优化拖拽样式，去掉聚焦时的虚线框
+        self.task_list_widget.setStyleSheet(
+            "QListWidget::item { border-bottom: 1px solid #eee; } QListWidget::item:selected { background: none; }")
 
-        # 【调整】日志区高度压缩至 100
+        self.right_panel.addWidget(self.task_list_widget)
+
+        # 日志区
         self.log_area = QTextEdit()
         self.log_area.setReadOnly(True)
-        self.log_area.setFixedHeight(100)  # 固定高度为100
+        self.log_area.setFixedHeight(100)
         self.log_area.setStyleSheet(
             "background-color: #1e1e1e; color: #00ff00; font-family: Consolas; font-size: 11px; padding: 5px;")
         self.right_panel.addWidget(QLabel("<b>运行日志 (实时):</b>"))
@@ -408,10 +428,10 @@ class RPAWindow(QMainWindow):
         if cur in titles: self.window_combo.setCurrentText(cur)
 
     def refresh_config_list(self):
-        self.config_list.clear()
+        self.config_list_widget.clear()
         if not os.path.exists(CONFIG_DIR): os.makedirs(CONFIG_DIR)
         files = sorted([f for f in os.listdir(CONFIG_DIR) if f.endswith(".json")])
-        self.config_list.addItems(files)
+        self.config_list_widget.addItems(files)
 
     def import_config(self):
         path, _ = QFileDialog.getOpenFileName(self, "选择要导入的配置文件", "", "JSON Files (*.json)")
@@ -434,31 +454,52 @@ class RPAWindow(QMainWindow):
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 tasks = json.load(f)
-            for r in self.rows: r.deleteLater()
-            self.rows.clear()
+
+            self.task_list_widget.clear()  # 清空旧列表
             for t in tasks: self.add_row(t)
             self.log_area.append(f"📂 已加载: {item.text()}")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"加载失败: {e}")
 
     def delete_selected_config(self):
-        item = self.config_list.currentItem()
+        item = self.config_list_widget.currentItem()
         if item and QMessageBox.question(self, "确认", f"确定删除 {item.text()}?") == QMessageBox.Yes:
             os.remove(os.path.join(CONFIG_DIR, item.text()))
             self.refresh_config_list()
 
     def add_row(self, data=None):
-        row = TaskRow(self.task_layout, self.delete_row)
-        if data: row.set_data(data)
-        self.rows.append(row)
+        # 1. 创建自定义 Widget
+        row_widget = TaskRow(self.delete_row)
+        if data: row_widget.set_data(data)
+
+        # 2. 创建 QListWidgetItem
+        item = QListWidgetItem(self.task_list_widget)
+        # 必须设置 Item 的大小提示，否则 Item 高度可能不正确
+        item.setSizeHint(row_widget.sizeHint())
+
+        # 3. 将 Widget 放入 Item
+        self.task_list_widget.setItemWidget(item, row_widget)
 
     def delete_row(self, row_widget):
-        if row_widget in self.rows:
-            self.rows.remove(row_widget)
-            row_widget.deleteLater()
+        # 遍历查找持有该 Widget 的 Item 并删除
+        for i in range(self.task_list_widget.count()):
+            item = self.task_list_widget.item(i)
+            if self.task_list_widget.itemWidget(item) == row_widget:
+                self.task_list_widget.takeItem(i)
+                break
+
+    def get_all_tasks(self):
+        # 遍历 ListWidget 获取当前顺序的任务
+        tasks = []
+        for i in range(self.task_list_widget.count()):
+            item = self.task_list_widget.item(i)
+            widget = self.task_list_widget.itemWidget(item)
+            if widget:
+                tasks.append(widget.get_data())
+        return tasks
 
     def save_config(self):
-        tasks = [row.get_data() for row in self.rows]
+        tasks = self.get_all_tasks()
         path, _ = QFileDialog.getSaveFileName(self, "保存配置", CONFIG_DIR, "JSON Files (*.json)")
         if path:
             if not path.endswith(".json"): path += ".json"
@@ -467,8 +508,14 @@ class RPAWindow(QMainWindow):
             self.refresh_config_list()
 
     def start_task(self):
-        tasks = [row.get_data() for row in self.rows if row.get_data()['value'] or row.get_data()['type'] == 5.0]
-        if not tasks: return
+        raw_tasks = self.get_all_tasks()
+        # 过滤空任务
+        tasks = [t for t in raw_tasks if t['value'] or t['type'] == 5.0]
+
+        if not tasks:
+            self.log_area.append("❌ 没有有效的任务步骤")
+            return
+
         self.start_btn.setEnabled(False)
         self.showMinimized()
         self.worker = WorkerThread(self.engine, tasks, (self.loop_combo.currentText() == "循环执行"),

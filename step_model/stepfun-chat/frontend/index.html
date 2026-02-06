@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StepFun AI 对话助手</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Markdown & Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fas fa-robot"></i>
+                <span>StepFun AI</span>
+            </div>
+
+            <div class="new-chat-btn" onclick="clearChat()">
+                <i class="fas fa-plus"></i>
+                新建对话
+            </div>
+
+            <div class="settings">
+                <h3><i class="fas fa-cog"></i> 设置</h3>
+                <div class="setting-item">
+                    <label>模型:</label>
+                    <select id="modelSelect">
+                        <option value="stepfun/step-3.5-flash:free">Step 3.5 Flash (免费)</option>
+                        <option value="stepfun/step-3.5-max">Step 3.5 Max</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label>最大Token:</label>
+                    <input type="number" id="maxTokens" value="1000" min="100" max="4000">
+                </div>
+            </div>
+
+            <div class="history-section">
+                <h3><i class="fas fa-history"></i> 历史对话</h3>
+                <div id="historyList" class="history-list">
+                    <!-- 历史记录将通过 JS 动态加载 -->
+                    <div class="loading-history">加载中...</div>
+                </div>
+            </div>
+
+            <div class="status">
+                <div class="status-indicator" id="statusIndicator"></div>
+                <span id="statusText">就绪</span>
+            </div>
+        </aside>
+
+        <!-- 主聊天区域 -->
+        <main class="chat-area">
+            <div class="chat-header">
+                <h2><i class="fas fa-comments"></i> StepFun AI 对话助手</h2>
+                <div class="header-actions">
+                    <button onclick="exportChat()" title="导出对话">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <!-- 欢迎消息 -->
+                <div class="message assistant-message">
+                    <div class="avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-content">
+                        <p>你好！我是阶跃星辰（StepFun）提供的AI助手。我可以帮助你进行各种对话和推理任务。</p>
+                        <p class="hint">输入 "exit"、"quit" 或 "退出" 结束对话</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <div class="input-container">
+                    <textarea id="userInput" placeholder="输入你的消息..." rows="3"
+                        onkeydown="handleKeyPress(event)"></textarea>
+                    <button id="sendBtn" onclick="sendMessage()" disabled>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <div class="input-footer">
+                    <span id="charCount">0</span>/2000 字符
+                    <span class="hint">按 Enter 发送，Shift+Enter 换行</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+
+
+    <script src="script.js"></script>
+</body>
+
+</html>
