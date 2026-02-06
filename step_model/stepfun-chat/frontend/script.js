@@ -15,6 +15,7 @@ const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
 const modelSelect = document.getElementById('modelSelect');
 const maxTokensInput = document.getElementById('maxTokens');
+const webSearchToggle = document.getElementById('webSearch');
 const historyList = document.getElementById('historyList');
 
 // 初始化
@@ -28,15 +29,21 @@ document.addEventListener('DOMContentLoaded', () => {
             ? hljs.highlight(code, { language: lang }).value
             : hljs.highlightAuto(code).value;
 
-        // 对代码内容进行转义，以处理引号等特殊字符
-        const escapedCode = code.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+        // 安全地处理 HTML 转义，用于存放在隐藏容器中
+        const htmlEscapedCode = code
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
 
         return `
-            <div style="position: relative;">
-                <button class="copy-btn" onclick="copyToClipboard(\`${escapedCode}\`, this)">
+            <div class="code-block-wrapper" style="position: relative;">
+                <button class="copy-btn" onclick="copyCode(this)">
                     <i class="fas fa-copy"></i> 复制
                 </button>
                 <pre><code class="hljs ${lang || ''}">${highlighted}</code></pre>
+                <div class="raw-code-hidden" style="display: none;">${htmlEscapedCode}</div>
             </div>
         `;
     };
@@ -64,9 +71,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     maxTokensInput.addEventListener('change', () => {
         const value = parseInt(maxTokensInput.value);
-        if (value < 100 || value > 4000) {
-            maxTokensInput.value = 1000;
-            showStatus('Token值必须在100-4000之间', 'warning');
+        if (value < 100 || value > 32000) {
+            maxTokensInput.value = 4000;
+            showStatus('Token值必须在100-32000之间', 'warning');
         }
     });
 });
@@ -111,7 +118,8 @@ async function sendMessage() {
     // 2. 设置生成状态
     isGenerating = true;
     sendBtn.disabled = true;
-    showStatus('正在生成回复...', 'normal');
+    const isWebSearch = webSearchToggle.checked;
+    showStatus(isWebSearch ? '正在联网搜索并生成回复...' : '正在生成回复...', 'normal');
 
     // 3. 变量用于跟踪助手消息
     let assistantMessageId = null;
@@ -138,7 +146,8 @@ async function sendMessage() {
                 model: modelSelect.value,
                 messages: conversationHistory,
                 stream: true,
-                max_tokens: parseInt(maxTokensInput.value)
+                max_tokens: parseInt(maxTokensInput.value),
+                web_search: isWebSearch
             }),
             signal: abortController.signal
         });
@@ -150,17 +159,22 @@ async function sendMessage() {
         // 4. 处理流式响应
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        let buffer = '';
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            const chunk = decoder.decode(value);
-            const lines = chunk.split('\n');
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // 保存可能不完整的最后一行
 
             for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const data = line.slice(6);
+                const trimmedLine = line.trim();
+                if (!trimmedLine) continue;
+
+                if (trimmedLine.startsWith('data: ')) {
+                    const data = trimmedLine.slice(6);
                     if (data === '[DONE]') continue;
 
                     try {
@@ -300,19 +314,62 @@ function formatMessage(content) {
     }
 }
 
+// 复制代码助手
+async function copyCode(btn) {
+    try {
+        const container = btn.closest('.code-block-wrapper');
+        if (!container) return;
+
+        const rawElement = container.querySelector('.raw-code-hidden');
+        if (!rawElement) return;
+
+        const rawCode = rawElement.textContent;
+        await copyToClipboard(rawCode, btn);
+    } catch (err) {
+        console.error('复制代码失败:', err);
+    }
+}
+
 // 复制内容到剪贴板
 async function copyToClipboard(text, btn) {
     try {
-        await navigator.clipboard.writeText(text);
+        // 尝试使用现代 API
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            // 回退方案：使用隐藏的 textarea
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            if (!successful) throw new Error('execCommand failed');
+        }
+
+        // 更新按钮状态
         const icon = btn.querySelector('i');
-        icon.className = 'fas fa-check';
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+        btn.classList.add('copied');
+
         setTimeout(() => {
-            icon.className = 'fas fa-copy';
+            btn.innerHTML = originalHTML;
+            btn.classList.remove('copied');
         }, 2000);
     } catch (err) {
         console.error('复制失败:', err);
+        alert('复制失败，请手动选择复制');
     }
 }
+
+// 将函数暴露给全局，确保 HTML onclick 可以访问
+window.copyCode = copyCode;
+window.copyToClipboard = copyToClipboard;
 
 // 滚动到底部
 function scrollToBottom() {

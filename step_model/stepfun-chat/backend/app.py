@@ -73,13 +73,23 @@ def chat():
         }
 
         # 构建请求体
+        web_search = data.get("web_search", False)
+        messages = data["messages"]
+
         payload = {
             "model": data.get("model", "stepfun/step-3.5-flash:free"),
-            "messages": data["messages"],
+            "messages": messages,
             "stream": data.get("stream", True),
-            "max_tokens": data.get("max_tokens", 1000),
+            "max_tokens": data.get("max_tokens", 4000),
             "temperature": data.get("temperature", 0.7),
         }
+
+        # 如果开启了联网搜索，添加 OpenRouter 插件参数
+        if web_search:
+            # 这里的参数名根据用户提供的线索调整，通常是 plugins
+            payload["plugins"] = [{"id": "web"}]
+            # 也有些版本支持直接在 payload 根部设置 web_search
+            # payload["web_search"] = True 
 
         # 转发请求到OpenRouter
         response = requests.post(
@@ -288,14 +298,14 @@ if __name__ == '__main__':
 
     # 开发环境配置
     print("=" * 60)
-    print("🚀 StepFun AI Chat Backend")
+    print("StepFun AI Chat Backend")
     print("=" * 60)
-    print(f"📂 静态文件目录: {static_folder}")
-    print(f"🔗 API地址: http://localhost:5000/api/chat")
-    print(f"🌐 前端地址: http://localhost:5000")
-    print(f"🔍 健康检查: http://localhost:5000/health")
+    print(f"Static folder: {static_folder}")
+    print(f"API Address: http://localhost:5000/api/chat")
+    print(f"Frontend Address: http://localhost:5000")
+    print(f"Health Check: http://localhost:5000/health")
     print("=" * 60)
-    print("⚠️  请确保已配置 backend/.env 文件中的API密钥")
+    print("Please make sure you have configured the API key in backend/.env")
     print("=" * 60)
 
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -109,6 +109,26 @@ body {
     font-size: 0.9rem;
 }
 
+.checkbox-label {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.checkbox-label input {
+    width: 18px !important;
+    height: 18px !important;
+    cursor: pointer;
+}
+
+.checkbox-label span {
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 0.95rem;
+}
+
 /* 历史记录样式 */
 .history-section {
     flex: 2;

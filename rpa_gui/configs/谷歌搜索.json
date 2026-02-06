@@ -2,14 +2,14 @@
     {
         "type": 1.0,
         "desc": "点击浏览器收藏夹里的google",
-        "value": "D:/project/py/rpa_gui/images/img_3.png",
+        "value": "E:/project/pytools/pytools/rpa_gui/images/img_14.png",
         "retry": 4,
         "delay": 0.5
     },
     {
         "type": 1.0,
         "desc": "点击搜索栏",
-        "value": "D:/project/py/rpa_gui/images/img_2.png",
+        "value": "E:/project/pytools/pytools/rpa_gui/images/img_2.png",
         "retry": 4,
         "delay": 1.0
     },
