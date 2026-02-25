@@ -73,6 +73,7 @@ class ProxyTool(QMainWindow):
         port_layout.addWidget(QLabel("代理端口:"))
         self.port_input = QLineEdit()
         self.port_input.setText("7890")
+        # self.port_input.setText("10808")
         port_layout.addWidget(self.port_input)
         param_layout.addLayout(port_layout)
 
