@@ -144,133 +144,10 @@ class MyFunc:
             self.logger.error(f"生成URL失败: {e}")
             return ""
 
-    @staticmethod
-    def _jpeg_end(data, start):
-        """从 JPEG SOI(FFD8) 起按段结构精确遍历到 EOI(FFD9)，返回 EOI 后位置。
-        正确处理 APPn 长度跳转，避免把 EXIF 内嵌缩略图误当图片结尾"""
-        n = len(data)
-        i = start + 2
-        try:
-            while i < n - 1:
-                if data[i] != 0xFF:
-                    i += 1
-                    continue
-                marker = data[i + 1]
-                # 无长度字段的 marker：填充、SOI、EOI、RST0-7、TEM
-                if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7 or marker in (0x01, 0xFF):
-                    if marker == 0xD9:  # EOI 到达，JPEG 结束
-                        return i + 2
-                    i += 2
-                    continue
-                # 有长度字段的段：段长 = 2字节(长度本身) + 段内容
-                if i + 4 > n:
-                    break
-                seg_len = (data[i + 2] << 8) | data[i + 3]
-                if marker == 0xDA:  # SOS：其后是熵编码数据，需扫描下一个 marker
-                    j = i + 2 + seg_len
-                    while j < n - 1:
-                        if data[j] == 0xFF:
-                            b = data[j + 1]
-                            if b == 0x00 or b == 0xFF:  # 填充字节
-                                j += 2
-                                continue
-                            if 0xD0 <= b <= 0xD7:  # RST 重启动 marker
-                                j += 2
-                                continue
-                            i = j  # 回到主循环处理该 marker
-                            break
-                        j += 1
-                    else:
-                        break
-                    continue
-                i += 2 + seg_len
-        except Exception:
-            pass
-        # 兜底：直接找最近 FFD9
-        e = data.find(b"\xff\xd9", start + 2)
-        return e + 2 if e >= 0 else n
-
-    def extract_images_from_doc(self, file_path):
-        """纯本地提取 .doc（Word 97-2003 二进制格式）内嵌图片，无需本机安装 Office。
-        .doc 中 JPEG/PNG 图片以原始字节完整保存，直接扫描文件魔数并逐段校验提取。
-        返回 images 列表，结构与 docx 提取一致：{index, format, data, path, size}"""
-        with open(file_path, "rb") as f:
-            data = f.read()
-
-        raw_blocks = []  # (起始偏移, 结束偏移, 格式)
-
-        # JPEG：SOI 起始，按段结构遍历到真实 EOI
-        start = 0
-        while True:
-            s = data.find(b"\xff\xd8\xff", start)
-            if s < 0:
-                break
-            end = self._jpeg_end(data, s)
-            raw_blocks.append((s, end, "jpeg"))
-            start = s + 2
-
-        # PNG：魔数起始，IEND(+CRC) 结束
-        start = 0
-        while True:
-            s = data.find(b"\x89PNG\r\n\x1a\n", start)
-            if s < 0:
-                break
-            ie = data.find(b"IEND\xaeB`\x82", s + 8)
-            end = ie + 8 if ie >= 0 else len(data)
-            raw_blocks.append((s, end, "png"))
-            start = s + 1
-
-        # GIF
-        start = 0
-        while True:
-            s = data.find(b"GIF87a", start)
-            if s < 0:
-                s = data.find(b"GIF89a", start)
-            if s < 0:
-                break
-            end = data.find(b"\x00\x3b", s + 6)  # trailer
-            raw_blocks.append((s, end + 1 if end >= 0 else len(data), "gif"))
-            start = s + 1
-
-        # 按偏移排序，用 PIL 校验有效性，跳过嵌套/冗余块
-        raw_blocks.sort(key=lambda x: x[0])
-        images = []
-        covered_until = -1
-        for off, end, fmt in raw_blocks:
-            if off < covered_until:  # 位于已接受块内部（嵌套冗余），跳过
-                continue
-            chunk = data[off:end]
-            try:
-                img = Image.open(BytesIO(chunk))
-                img.load()  # 真正解码，失败则说明块不完整/无效
-            except Exception:
-                continue
-            images.append({
-                "index": len(images),
-                "format": fmt,
-                "data": chunk,
-                "path": f"image{len(images) + 1}.{fmt}",
-                "size": len(chunk),
-            })
-            covered_until = end
-        return images
-
     def get_file_imgs(self, file_name, file_size):
         """从Word文件中提取图片（按文档中实际顺序，修复xpath参数错误）"""
         try:
             file_path = os.path.join(self.doc_file_dir, file_name)
-            ext = os.path.splitext(file_name)[1].lower()
-
-            # .doc（Word 97-2003 二进制格式）：纯本地魔数扫描提取，无需本机安装 Office
-            if ext == ".doc":
-                images = self.extract_images_from_doc(file_path)
-                if not images:
-                    return None, f"未从 {file_name} 中提取到图片（仅支持 JPEG/PNG/GIF 内嵌图）"
-                return images, None
-
-            if ext != ".docx":
-                return None, f"不支持的文件类型: {file_name}（仅支持 .doc / .docx）"
-
             doc = docx.Document(file_path)
 
             images = []
@@ -467,12 +344,6 @@ class ExtractFileProcessor:
             for file_name in files:
                 file_path = os.path.join(self.my_func.doc_file_dir, file_name)
                 if os.path.isdir(file_path):
-                    continue
-
-                # 仅处理 .doc / .docx，其他格式跳过（避免中断整个批次）
-                ext = os.path.splitext(file_name)[1].lower()
-                if ext not in (".doc", ".docx"):
-                    self.app.add_log(f"跳过非 Word 文件: {file_name}")
                     continue
 
                 # 获取文件大小

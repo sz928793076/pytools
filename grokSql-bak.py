@@ -38,6 +38,7 @@ from PyQt6.QtCore import (
 # 尝试导入 SQLAlchemy，如果没有安装则会在运行时提示
 try:
     from sqlalchemy import create_engine
+
     HAS_SQLALCHEMY = True
 except ImportError:
     HAS_SQLALCHEMY = False
@@ -50,21 +51,6 @@ def camel_to_snake(name):
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 
-def try_to_numeric(val):
-    """尝试将值转换为数字（int/float），失败则返回原值"""
-    if isinstance(val, (int, float)):
-        return val
-    if isinstance(val, str):
-        try:
-            return int(val)
-        except ValueError:
-            try:
-                return float(val)
-            except ValueError:
-                return val
-    return val
-
-
 # ==================== 数据库配置弹窗类 ====================
 class DbConfigDialog(QDialog):
     def __init__(self, parent=None):
@@ -72,6 +58,8 @@ class DbConfigDialog(QDialog):
         self.setWindowTitle("数据库连接配置")
         self.setFixedSize(400, 300)
 
+        # 使用 QSettings 进行持久化存储
+        # 组织名: MyTools, 应用名: JsonConverter
         self.settings = QSettings("MyTools", "JsonConverter")
 
         self.init_ui()
@@ -82,6 +70,7 @@ class DbConfigDialog(QDialog):
         form_layout = QFormLayout()
         form_layout.setSpacing(15)
 
+        # 控件定义
         self.input_host = QLineEdit()
         self.input_host.setPlaceholderText("例如: 127.0.0.1")
 
@@ -101,6 +90,7 @@ class DbConfigDialog(QDialog):
         self.combo_type = QComboBox()
         self.combo_type.addItems(["mysql+pymysql", "postgresql", "sqlite", "mssql+pymssql"])
 
+        # 添加到布局
         form_layout.addRow("数据库类型:", self.combo_type)
         form_layout.addRow("主机 (Host):", self.input_host)
         form_layout.addRow("端口 (Port):", self.input_port)
@@ -110,6 +100,7 @@ class DbConfigDialog(QDialog):
 
         layout.addLayout(form_layout)
 
+        # 按钮区
         btn_layout = QHBoxLayout()
         btn_save = QPushButton("保存配置")
         btn_save.clicked.connect(self.save_settings)
@@ -125,6 +116,7 @@ class DbConfigDialog(QDialog):
         self.setLayout(layout)
 
     def load_settings(self):
+        """加载保存的配置"""
         self.input_host.setText(self.settings.value("db_host", "127.0.0.1"))
         self.input_port.setValue(int(self.settings.value("db_port", 3306)))
         self.input_user.setText(self.settings.value("db_user", "root"))
@@ -137,6 +129,7 @@ class DbConfigDialog(QDialog):
             self.combo_type.setCurrentIndex(idx)
 
     def save_settings(self):
+        """保存配置到系统"""
         self.settings.setValue("db_host", self.input_host.text().strip())
         self.settings.setValue("db_port", self.input_port.value())
         self.settings.setValue("db_user", self.input_user.text().strip())
@@ -148,6 +141,7 @@ class DbConfigDialog(QDialog):
         self.accept()
 
     def get_connection_info(self):
+        """返回配置字典"""
         return {
             "type": self.combo_type.currentText(),
             "host": self.input_host.text().strip(),
@@ -172,11 +166,7 @@ class PandasModel(QAbstractTableModel):
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         if index.isValid() and role == Qt.ItemDataRole.DisplayRole:
-            val = self._data.iloc[index.row(), index.column()]
-            # 关键修改：缺失值显示为 "null"，而非 "None"
-            if pd.isna(val):
-                return "null"
-            return str(val)
+            return str(self._data.iloc[index.row(), index.column()])
         return None
 
     def headerData(self, col, orientation, role):
@@ -202,11 +192,12 @@ class JsonConverterApp(QMainWindow):
         self.df_current = pd.DataFrame()
         self.active_filters = []
 
-        self.init_menu()
+        self.init_menu()  # 初始化菜单
         self.init_ui()
         self.apply_styles()
 
     def init_menu(self):
+        """初始化顶部菜单栏"""
         menubar = self.menuBar()
         setting_menu = menubar.addMenu("设置(S)")
 
@@ -216,6 +207,7 @@ class JsonConverterApp(QMainWindow):
         setting_menu.addAction(db_config_action)
 
     def apply_styles(self):
+        """统一美化样式"""
         self.setStyleSheet("""
             QPushButton {
                 background-color: #1976d2;
@@ -230,6 +222,7 @@ class JsonConverterApp(QMainWindow):
             QPushButton:pressed { background-color: #0d47a1; }
             QPushButton:disabled { background-color: #90caf9; color: #e3f2fd; }
 
+            /* 导出类按钮（玫红色） */
             QPushButton#exportBtn {
                 background-color: #d81b60;
                 font-weight: bold;
@@ -237,6 +230,7 @@ class JsonConverterApp(QMainWindow):
             QPushButton#exportBtn:hover { background-color: #c2185b; }
             QPushButton#exportBtn:pressed { background-color: #ad1457; }
 
+            /* 数据库插入按钮（紫色） */
             QPushButton#dbInsertBtn {
                 background-color: #7b1fa2;
                 font-weight: bold;
@@ -277,7 +271,7 @@ class JsonConverterApp(QMainWindow):
         main_layout.setSpacing(12)
         main_layout.setContentsMargins(16, 16, 16, 16)
 
-        # 顶部控制区
+        # ==================== 顶部控制区 ====================
         top_widget = QWidget()
         top_layout = QVBoxLayout(top_widget)
         top_layout.setSpacing(14)
@@ -332,11 +326,12 @@ class JsonConverterApp(QMainWindow):
         filter_list_layout = QVBoxLayout(filter_list_frame)
         filter_list_layout.addWidget(QLabel("当前筛选条件（双击删除）："))
         self.list_filters = QListWidget()
-        self.list_filters.setMaximumHeight(130)
+        self.list_filters.setMaximumHeight(130)  # 稍微调高一点适应新按钮
         self.list_filters.itemDoubleClicked.connect(self.remove_filter_condition)
         filter_list_layout.addWidget(self.list_filters)
         filter_status_layout.addWidget(filter_list_frame, stretch=5)
 
+        # === 导出按钮区域 (修改了这里) ===
         export_btn_layout = QVBoxLayout()
         export_btn_layout.setSpacing(8)
 
@@ -352,8 +347,9 @@ class JsonConverterApp(QMainWindow):
         btn_sql.clicked.connect(self.export_sql)
         export_btn_layout.addWidget(btn_sql)
 
+        # 新增按钮：插入数据库
         btn_db_insert = QPushButton("插入数据库")
-        btn_db_insert.setObjectName("dbInsertBtn")
+        btn_db_insert.setObjectName("dbInsertBtn")  # 使用紫色样式
         btn_db_insert.setFixedHeight(38)
         btn_db_insert.clicked.connect(self.insert_to_database)
         export_btn_layout.addWidget(btn_db_insert)
@@ -363,7 +359,7 @@ class JsonConverterApp(QMainWindow):
         top_layout.addLayout(filter_status_layout)
         main_layout.addWidget(top_widget)
 
-        # 表格区域
+        # ==================== 表格区域 ====================
         table_group = QGroupBox("3. 数据表格")
         table_layout = QVBoxLayout()
         self.table_view = QTableView()
@@ -380,10 +376,12 @@ class JsonConverterApp(QMainWindow):
     # ==================== 逻辑方法 ====================
 
     def open_db_config(self):
+        """打开数据库配置弹窗"""
         dialog = DbConfigDialog(self)
         dialog.exec()
 
     def insert_to_database(self):
+        """将当前表格数据直接插入数据库"""
         if not HAS_SQLALCHEMY:
             QMessageBox.critical(self, "缺少依赖",
                                  "请先安装 sqlalchemy 和 数据库驱动。\n例如：pip install sqlalchemy pymysql")
@@ -393,6 +391,7 @@ class JsonConverterApp(QMainWindow):
             QMessageBox.warning(self, "提示", "当前没有数据可插入")
             return
 
+        # 1. 检查配置是否存在
         settings = QSettings("MyTools", "JsonConverter")
         db_host = settings.value("db_host")
         db_user = settings.value("db_user")
@@ -403,16 +402,19 @@ class JsonConverterApp(QMainWindow):
                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if ret == QMessageBox.StandardButton.Yes:
                 self.open_db_config()
+                # 重新检查
                 if not settings.value("db_host"):
                     return
             else:
                 return
 
+        # 2. 获取表名
         table_name, ok = QInputDialog.getText(self, "插入数据库", "请输入目标表名：", text="my_table")
         if not ok or not table_name.strip():
             return
         table_name = table_name.strip()
 
+        # 3. 确认插入方式
         items = ["追加 (Append)", "替换 (Replace - 慎用)", "失败则报错 (Fail)"]
         item, ok = QInputDialog.getItem(self, "插入模式", "请选择插入模式：", items, 0, False)
         if not ok:
@@ -425,18 +427,29 @@ class JsonConverterApp(QMainWindow):
         else:
             if_exists_mode = 'fail'
 
+        # 4. 执行插入
         try:
+            # 读取配置构建 Connection String
             db_type = settings.value("db_type", "mysql+pymysql")
             db_port = settings.value("db_port", 3306)
             db_pass = settings.value("db_pass", "")
 
+            # 构建 SQLAlchemy URL
+            # 格式: mysql+pymysql://user:password@host:port/dbname
+            # 注意：如果密码包含特殊字符，建议使用 urllib.parse.quote_plus 处理，这里简化处理
             conn_str = f"{db_type}://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
+
+            # 创建引擎
             engine = create_engine(conn_str)
 
+            # 获取当前数据
             df = self.get_current_table_data()
+
+            # 自动处理列名（驼峰转下划线），保持数据库规范
             df_to_save = df.copy()
             df_to_save.columns = [camel_to_snake(c) for c in df_to_save.columns]
 
+            # 写入数据库
             df_to_save.to_sql(name=table_name, con=engine, if_exists=if_exists_mode, index=False)
 
             QMessageBox.information(self, "成功", f"成功插入 {len(df_to_save)} 条数据到表 `{table_name}`")
@@ -451,15 +464,13 @@ class JsonConverterApp(QMainWindow):
             return
         try:
             data = json.loads(text)
-            if isinstance(data, dict):
-                data = [data]
+            if isinstance(data, dict): data = [data]
             if not isinstance(data, list):
                 QMessageBox.critical(self, "错误", "JSON 格式必须是列表或单个对象")
                 return
-
-            # 保留原始类型，不自动转换数值
             self.df_original = pd.DataFrame(data)
-
+            for col in self.df_original.columns:
+                self.df_original[col] = pd.to_numeric(self.df_original[col], errors='ignore')
             self.active_filters = []
             self.list_filters.clear()
             self.refresh_filter_columns()
@@ -505,58 +516,38 @@ class JsonConverterApp(QMainWindow):
             self.apply_all_filters()
 
     def apply_all_filters(self):
-        if self.df_original.empty:
-            return
+        if self.df_original.empty: return
         df = self.df_original.copy()
         try:
             for col, op, val_text in self.active_filters:
-                col_data = df[col]
-
-                if op in ["大于", "小于", "等于"]:
-                    # 尝试将比较值转换为数值
-                    try:
-                        numeric_val = float(val_text) if '.' in val_text else int(val_text)
-                    except ValueError:
-                        numeric_val = val_text
-
-                    def to_numeric_if_possible(x):
-                        if isinstance(x, (int, float)):
-                            return x
-                        if isinstance(x, str):
-                            try:
-                                return int(x) if x.isdigit() else float(x)
-                            except ValueError:
-                                return x
-                        return x
-
-                    converted_col = col_data.apply(to_numeric_if_possible)
-                    compare_val = numeric_val
-
-                    if op == "等于":
-                        df = df[converted_col == compare_val]
-                    elif op == "大于":
-                        df = df[converted_col > compare_val]
-                    elif op == "小于":
-                        df = df[converted_col < compare_val]
-                elif op == "包含":
-                    df = df[col_data.astype(str).str.contains(val_text, case=False, na=False)]
+                is_num = pd.api.types.is_numeric_dtype(df[col])
+                if op == "包含":
+                    df = df[df[col].astype(str).str.contains(val_text, case=False, na=False)]
                 elif op == "在集合中":
                     parts = [v.strip() for v in val_text.split(',')]
-                    try:
-                        if pd.to_numeric(col_data, errors='coerce').notna().mean() > 0.8:
-                            numeric_parts = []
-                            for p in parts:
-                                try:
-                                    numeric_parts.append(int(p) if p.isdigit() else float(p))
-                                except ValueError:
-                                    numeric_parts.append(p)
-                            parts = numeric_parts
-                    except:
-                        pass
-                    if any(isinstance(p, str) for p in parts):
-                        df = df[col_data.astype(str).isin([str(p) for p in parts])]
+                    if is_num:
+                        nums = []
+                        for p in parts:
+                            try:
+                                nums.append(float(p) if '.' in p else int(p))
+                            except:
+                                pass
+                        df = df[df[col].isin(nums) if nums else df[col].astype(str).isin(parts)]
                     else:
-                        df = df[col_data.isin(parts)]
+                        df = df[col].astype(str).isin(parts)
+                else:
+                    t_val = val_text
+                    if is_num:
+                        try:
+                            t_val = float(val_text)
+                        except:
+                            pass
+                    if op == "等于":
+                        df = df[df[col] == t_val]
+                    elif op == "大于":
+                        df = df[df[col] > t_val]
+                    elif op == "小于":
+                        df = df[df[col] < t_val]
             self.df_current = df
             self.refresh_table()
         except Exception as e:
@@ -569,15 +560,12 @@ class JsonConverterApp(QMainWindow):
         h = self.table_view.horizontalHeader()
         for i in range(h.count()):
             w = h.sectionSize(i)
-            if w < 90:
-                h.resizeSection(i, 90)
-            if w > 420:
-                h.resizeSection(i, 420)
+            if w < 90: h.resizeSection(i, 90)
+            if w > 420: h.resizeSection(i, 420)
 
     def get_current_table_data(self):
         model = self.table_view.model()
-        if model and hasattr(model, '_data'):
-            return model._data.copy()
+        if model and hasattr(model, '_data'): return model._data.copy()
         return self.df_current.copy()
 
     def export_csv(self):
@@ -585,8 +573,7 @@ class JsonConverterApp(QMainWindow):
             QMessageBox.warning(self, "提示", "没有数据可导出")
             return
         file_path, _ = QFileDialog.getSaveFileName(self, "保存为 CSV", "", "CSV 文件 (*.csv);;所有文件 (*.*)")
-        if not file_path:
-            return
+        if not file_path: return
         try:
             df = self.get_current_table_data()
             df.to_csv(file_path, index=False, encoding='utf-8-sig')
@@ -599,14 +586,11 @@ class JsonConverterApp(QMainWindow):
             QMessageBox.warning(self, "提示", "没有数据可导出")
             return
         table_name, ok = QInputDialog.getText(self, "导出 SQL", "请输入表名：", text="my_table")
-        if not ok or not table_name.strip():
-            return
+        if not ok or not table_name.strip(): return
         batch_size, ok = QInputDialog.getInt(self, "批量设置", "每批次记录数：", value=1000, min=1)
-        if not ok:
-            return
+        if not ok: return
         file_path, _ = QFileDialog.getSaveFileName(self, "保存为 SQL", "", "SQL 文件 (*.sql)")
-        if not file_path:
-            return
+        if not file_path: return
         try:
             df = self.get_current_table_data()
             cols = [camel_to_snake(c) for c in df.columns]
@@ -623,10 +607,7 @@ class JsonConverterApp(QMainWindow):
                         if pd.isna(val):
                             vals.append("NULL")
                         elif isinstance(val, (int, float)):
-                            if isinstance(val, float) and val.is_integer():
-                                vals.append(str(int(val)))
-                            else:
-                                vals.append(str(val))
+                            vals.append(str(val))
                         else:
                             vals.append(f"'{str(val).replace("'", "''")}'")
                     batch_vals.append(f"({', '.join(vals)})")
